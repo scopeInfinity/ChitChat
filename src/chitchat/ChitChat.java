@@ -11,9 +11,11 @@ import javax.swing.JOptionPane;
 
 public class ChitChat implements Controller {
     private String myname;
+    private VideoCall videoCall;
 
     public ChitChat(String myname) {
         this.myname = myname;
+        videoCall = new VideoCall(myname);
     }
     
     public static ChitChat start(String myname) {
@@ -27,9 +29,20 @@ public class ChitChat implements Controller {
         return chat;
        
     }
+    public static boolean isReachable(String IP) {
+        try{
+            return InetAddress.getByName(IP).isReachable(2000);
+        }catch(Exception e) {
+            return false;
+        }
+    }
     
     public void addClient(String IP) {
         System.out.println("Attempt to Connect to "+IP);
+        if(!isReachable(IP)) {
+            JOptionPane.showMessageDialog(null, "User Offline");
+            return;
+        }
             Socket socket = connectTo(IP);
             if(socket==null) {
                 JOptionPane.showMessageDialog(null, "Failed to Connect");
@@ -58,6 +71,21 @@ public class ChitChat implements Controller {
             return null;
         }
         
+    }
+    
+    public void callAsVideo(String IP) {
+        if(!isReachable(IP)) {
+            JOptionPane.showMessageDialog(null, "User Offline");
+            return;
+        }
+        
+        new Thread("Call Client"){
+            @Override
+            public void run() {
+                videoCall.connectToCall(IP);
+            }
+            
+        }.start();
     }
     
     @Override

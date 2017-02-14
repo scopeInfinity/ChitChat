@@ -9,6 +9,7 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.util.ArrayList;
 import javax.swing.JOptionPane;
+import static javax.swing.JOptionPane.INFORMATION_MESSAGE;
 
 /**
  *
@@ -30,7 +31,12 @@ public class FriendList extends javax.swing.JFrame {
         list1.addItemListener(new ItemListener() {
             @Override
             public void itemStateChanged(ItemEvent e) {
-                cc.addClient(ips.get((int)e.getItem()));
+                String ip =ips.get((int)e.getItem());
+                int type = JOptionPane.showConfirmDialog(null, "Do you want to video call","Video Call", JOptionPane.YES_NO_OPTION);
+                if(type==0)
+                    cc.callAsVideo(ip);
+                else
+                    cc.addClient(ip);
             }
         });
         updateFriendList();
