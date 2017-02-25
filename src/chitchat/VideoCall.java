@@ -26,9 +26,12 @@ import com.xuggle.xuggler.demos.VideoImage;
 import com.xuggle.xuggler.video.ConverterFactory;
 import com.xuggle.xuggler.video.IConverter;
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -42,37 +45,69 @@ import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
 
 public class VideoCall {
-
+    private boolean isBusy = false;
     private int SWIDTH = 640;
     private int SHEIGHT = 480;
 
-    private int SFRAMERATE = 25;
-    private int PACKETSLEEPTIMER = 40;
+    private int SFRAMERATE = 20;
+    private int PACKETSLEEPTIMER = 1000/SFRAMERATE;
 
     private VideoImage mScreen;
 
-    private String driverName = "v4l2";
-    private String deviceName = "/dev/video0";
+    private String driverName;
+    private String deviceName;
+
+    private static final String WINDOWS_driverName = "vfwcap";
+    private static final String WINDOWS_deviceName = "0";
+    private static final String LINUX_driverName = "v4l2";
+    private static final String LINUX_deviceName = "/dev/video0";
 
     private int VIDEO_PORT = 7575;
-    private boolean anyCallRunning = false;
-   
+    
     private String myname;
-
+  
     public VideoCall(String myname) {
         this.myname = myname;
+        String OS = System.getProperty("os.name").toLowerCase();
+        if(OS.contains("windows")) {
+            driverName = WINDOWS_driverName;
+            deviceName = WINDOWS_deviceName;
+            System.out.println("OS : Windows");
+        } else if(OS.contains("nux")) {
+            driverName = LINUX_driverName;
+            deviceName = LINUX_deviceName;
+            System.out.println("OS : Linux");
+        } else {
+            System.out.println("Unsupported OS : "+OS);
+        }
         System.out.println("Call Server Status : "+makeCallServer());
+    }
+    
+    public boolean canStart() {
+        return !isBusy;
     }
 
     public boolean makeCallServer() {
         try {
+            System.out.println("Creating Video Socket");
             ServerSocket server = new ServerSocket(VIDEO_PORT);
+            System.out.println("Video Socket created");
             new Thread("Call Server") {
                 @Override
                 public void run() {
                     while (true) {
                         try {
+                            while(isBusy) {
+                                Thread.yield();
+                            }
+                            System.out.println("Waiting for Video Call");
                             Socket socket = server.accept();
+                            while(isBusy) {
+                                System.out.println("Call Disconnected, due to already in Call");
+                                socket.close();
+                            }
+                            isBusy = true;
+                            System.out.println("Video Call client : "+socket);
                             startCall(socket);
                         } catch (IOException ex) {
                             Logger.getLogger(VideoCall.class.getName()).log(Level.SEVERE, null, ex);
@@ -94,37 +129,121 @@ public class VideoCall {
         try {
             Socket socket = new Socket(IP, VIDEO_PORT);
             System.out.println("Going to Connect");
+            while(isBusy){
+                Thread.yield();
+            }
+            isBusy = true;
             startCall(socket);
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             Logger.getLogger(VideoCall.class.getName()).log(Level.SEVERE, null, ex);
-            JOptionPane.showMessageDialog(null, "Can't connect for Video Call");
+            JOptionPane.showMessageDialog(null, "Call Disconnected");
         }
 
     }
     
     private boolean startCall(Socket socket) {
         try {
-
             BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
-            startStreaming(socket, new ObjectOutputStream(bos));
-            ObjectInputStream is = new ObjectInputStream(socket.getInputStream());
+            DataInputStream is = new DataInputStream(socket.getInputStream());
+            System.out.println("Video Stream Opened");
+            
             new Thread("Play Stream") {
                 @Override
                 public void run() {
                     super.run(); //To change body of generated methods, choose Tools | Templates.
-                    playStream(socket, is);
+                    System.out.println("Going to Play Stream");
+                    playStream(socket, is, bos);
+
                 }
                 
             }.start();
+            System.out.println("Going to Start Stream");
+            startStreaming(socket, bos);
             return true;
         } catch (Exception e) {
             return false;
         }
     }
 
-    private boolean startStreaming(Socket socket, ObjectOutputStream bos) {
+    /**
+     * Wait for ACK
+     */
+    private boolean STREAM_ACK_FRAME;
+    
+    private static final int TYPE_STRING = 0;
+    private static final int TYPE_IMAGE = 1;
+    private static final int TYPE_ACK = 2;
+    
+    /**
+     * Send Data to Stream
+     * @param bos
+     * @param data
+     * @param type
+     * @throws IOException 
+     */
+    synchronized private void sendData(BufferedOutputStream bos, byte []data, int type) throws IOException {
+        bos.write(type);
+         if(data==null)
+             data=new byte[0];
+        int len = data.length;
+        for (int i = 0; i < 4; i++) {
+            bos.write(len%256);
+            len/=256;
+        }
+        bos.write(data);
+        System.out.println("Send "+data.length+" Hash:"+data.hashCode());
+        bos.flush();
+    }
+    
+    /**
+     * Get Data from Stream
+     * @param bis
+     * @param type type[0] will  be updated to new type
+     * @return data
+     * @throws IOException 
+     */
+    private byte[] readData(DataInputStream bis,int type[]) throws IOException {
+        System.out.println("Waiting to Rec");
+        type[0] = bis.read();
+        if(type[0]==-1)
+        {
+            new RuntimeException("Connection Closed");
+        }
+        System.out.println("Rec Type  "+type[0]);
+        
+        int len = 0;
+        for (int i = 0; i < 4; i++) {
+            int l = bis.read();
+            if(l==-1)
+                new IOException("No Length Found");
+            len=len+l*(1<<(8*i));
+        }
+        System.out.println("LEn : "+len);
+        byte[] data=new byte[len];
+        bis.readFully(data);
+        System.out.println("Rec "+data.length+" Hash :"+data.hashCode());
+        
+        return data;
+    }
+    
+    private void writeString(BufferedOutputStream bos,String str) throws IOException {
+        sendData(bos,str.getBytes(),TYPE_STRING);
+    }
+    
+    
+    private String readString(DataInputStream bis) throws IOException {
+        int type[]= new int[1];
+        byte data[]=readData(bis, type);
+        if(type[0]!=TYPE_STRING)
+            new RuntimeException("Not String Type");
+        return new String(data);
+    }
+    
+    private boolean startStreaming(Socket socket, BufferedOutputStream bos) {
         try {
-            bos.writeObject(myname);
+            STREAM_ACK_FRAME = false;
+            writeString(bos,myname);
+            //bos.writeLong(System.currentTimeMillis());
             System.out.println("Going to Stream");
             if (!IVideoResampler.isSupported(IVideoResampler.Feature.FEATURE_COLORSPACECONVERSION)) {
                 throw new RuntimeException("you must install the GPL version of Xuggler (with IVideoResampler support) for this demo to work");
@@ -176,12 +295,17 @@ public class VideoCall {
 
             IPacket packet = IPacket.make();
             int i = 0;
-
-            while (container.readNextPacket(packet) >= 0) {
+            //On Call
+            while (isBusy && container.readNextPacket(packet) >= 0) {
                 if (socket.isClosed()) {
                     break;
                 }
                 if (packet.getStreamIndex() == streamIndex) {
+                    if(STREAM_ACK_FRAME){
+                        Thread.yield();
+                        continue;
+                    }
+                       
                     IVideoPicture picture = IVideoPicture.make(coder.getPixelType(), coder.getWidth(), coder.getHeight());
                     int offset = 0;
                     while (offset < packet.getSize()) {
@@ -219,11 +343,10 @@ public class VideoCall {
                                 BufferedImage edgesImage = new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
                                 edgesImage.getWritableTile(0, 0).setDataElements(0, 0, w, h, pixels);
                                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
                                 ImageIO.write(image, "jpg", baos);
-                                bos.writeInt(baos.size());
-                                baos.writeTo(bos);
-                                bos.flush();
+                                STREAM_ACK_FRAME = true;
+                                sendData(bos, baos.toByteArray(),TYPE_IMAGE);
+//                                bos.writeLong(System.currentTimeMillis());
                                 System.out.println("Image Send");
                                 try {
                                     Thread.sleep(PACKETSLEEPTIMER);
@@ -241,45 +364,53 @@ public class VideoCall {
 
             bos.close();
             coder.close();
-            JOptionPane.showMessageDialog(null, "Terminated");
-
             return true;
         } catch (Exception e) {
             e.printStackTrace();
             System.err.println("Error in Streaming!!!!!!!!!!!!!");
 //            JOptionPane.showMessageDialog(null, "Error in Service");
             return false;
+        } finally {
+            isBusy = false;
+            JOptionPane.showMessageDialog(null, "Call Over");
         }
     }
 
-    private boolean playStream(Socket socket, ObjectInputStream is) {
+    private boolean playStream(Socket socket, DataInputStream is, BufferedOutputStream bos) {
         try {
-            anyCallRunning=true;
             mScreen = new VideoImage();
             System.out.println("Play Stream");
-            String otherName = (String) is.readObject();
+            String otherName = readString(is);
+            System.out.println("Other Name : "+otherName);
+       
             mScreen.setTitle("Video Call "+myname+" <--> "+otherName);
-            while (!socket.isClosed()) {
+            while (isBusy && !socket.isClosed()) {
                 BufferedImage image;
-                int size = is.readInt();
-                byte[] buffer = new byte[size];
-                is.readFully(buffer);
-                
-                System.out.println("Imaged Received");
-                image = ImageIO.read(new ByteArrayInputStream(buffer));
-                mScreen.setImage(image);
+                int type[] = new int[1];
+                byte[] buffer = readData(is, type);
+                System.out.println("Received : "+type[0]);
+                if(type[0]==TYPE_IMAGE) {
+                    System.out.println("Imaged Received");
+                    image = ImageIO.read(new ByteArrayInputStream(buffer));
+                    sendData(bos,null,TYPE_ACK);
+                    mScreen.setImage(image);
+                } else if(type[0] == TYPE_ACK) {
+                    STREAM_ACK_FRAME = false;
+                } else {
+                    new RuntimeException("Invalid Rec Type");
+                }
             }
-            mScreen.dispose();
-            mScreen = null;
             return true;
-        } catch (IOException ex) {
-            Logger.getLogger(VideoCall.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (ClassNotFoundException ex) {
+        } catch (Exception ex) {
             Logger.getLogger(VideoCall.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
-            anyCallRunning = false;
+            isBusy = false;
+            if(mScreen!=null)
+                mScreen.dispose();
+            mScreen = null;
         }
         return false;
     }
+    
 
 }

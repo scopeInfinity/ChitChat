@@ -39,13 +39,16 @@ public class ChitChat implements Controller {
     
     public void addClient(String IP) {
         System.out.println("Attempt to Connect to "+IP);
-        if(!isReachable(IP)) {
-            JOptionPane.showMessageDialog(null, "User Offline");
-            return;
-        }
+        //Ping not working always, thus not taking as base case
             Socket socket = connectTo(IP);
             if(socket==null) {
-                JOptionPane.showMessageDialog(null, "Failed to Connect");
+         
+                if(!isReachable(IP)) {
+                    JOptionPane.showMessageDialog(null, "User Offline");
+                    return;
+                }
+                
+                JOptionPane.showMessageDialog(null, "User Failed to Connect");
             } else {
                 new Thread("Client") {
                     public void run() {
@@ -74,18 +77,22 @@ public class ChitChat implements Controller {
     }
     
     public void callAsVideo(String IP) {
-        if(!isReachable(IP)) {
-            JOptionPane.showMessageDialog(null, "User Offline");
-            return;
+//        if(!isReachable(IP)) {
+//            JOptionPane.showMessageDialog(null, "User Offline");
+//            return;
+//        }
+        if(videoCall.canStart()) {
+            new Thread("Call Client"){
+                @Override
+                public void run() {
+                    videoCall.connectToCall(IP);
+                }
+
+            }.start();
         }
-        
-        new Thread("Call Client"){
-            @Override
-            public void run() {
-                videoCall.connectToCall(IP);
-            }
-            
-        }.start();
+        else {
+            JOptionPane.showMessageDialog(null, "Max 1 Video Call Allowed");
+        }
     }
     
     @Override
