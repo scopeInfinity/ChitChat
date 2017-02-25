@@ -25,6 +25,9 @@ import com.xuggle.xuggler.Utils;
 import com.xuggle.xuggler.demos.VideoImage;
 import com.xuggle.xuggler.video.ConverterFactory;
 import com.xuggle.xuggler.video.IConverter;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 import java.awt.image.BufferedImage;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -379,6 +382,13 @@ public class VideoCall {
     private boolean playStream(Socket socket, DataInputStream is, BufferedOutputStream bos) {
         try {
             mScreen = new VideoImage();
+            mScreen.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    isBusy=false;
+                }
+               
+            });
             System.out.println("Play Stream");
             String otherName = readString(is);
             System.out.println("Other Name : "+otherName);

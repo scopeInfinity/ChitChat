@@ -7,6 +7,8 @@ package chitchat;
 
 import java.awt.Rectangle;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 /**
  *
@@ -22,6 +24,13 @@ public class UI extends javax.swing.JFrame {
         this.controller = controller;
         setTitle("Chit Chat");
         headnames.setText(myname+" <---> "+othername);
+        addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                   controller.sendMessage("Leaving... Bye!");
+                   dispose();
+                }
+        });
     }
 
     /**

@@ -40,22 +40,23 @@ public class ChitChat implements Controller {
     public void addClient(String IP) {
         System.out.println("Attempt to Connect to "+IP);
         //Ping not working always, thus not taking as base case
-            Socket socket = connectTo(IP);
-            if(socket==null) {
-         
-                if(!isReachable(IP)) {
-                    JOptionPane.showMessageDialog(null, "User Offline");
-                    return;
-                }
-                
-                JOptionPane.showMessageDialog(null, "User Failed to Connect");
-            } else {
-                new Thread("Client") {
-                    public void run() {
-                        addP2P(socket,myname);
+         new Thread("Client") {
+            public void run() {
+                   Socket socket = connectTo(IP);
+                    if(socket==null) {
+
+                        if(!isReachable(IP)) {
+                            JOptionPane.showMessageDialog(null, "User Offline");
+                            return;
+                        }
+
+                        JOptionPane.showMessageDialog(null, "User Failed to Connect");
+                    } else {
+                                addP2P(socket,myname);
+                           }
                     }
-                }.start();
-            }
+        }.start();
+            
     }
     
     private static Socket connectTo(String IP) {

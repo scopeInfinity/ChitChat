@@ -28,6 +28,7 @@ public class FriendList extends javax.swing.JFrame {
         this.mypwd = mypwd;
         cc = ChitChat.start(myusername);
         initComponents();
+        setTitle("ChitChat");
         list1.addItemListener(new ItemListener() {
             @Override
             public void itemStateChanged(ItemEvent e) {
