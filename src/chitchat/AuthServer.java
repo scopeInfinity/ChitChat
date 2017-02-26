@@ -73,7 +73,7 @@ public class AuthServer extends Thread{
 
     private boolean checkLogin(BufferedReader br, BufferedWriter bw, boolean b, String ip) throws IOException {
         String name=br.readLine().trim();
-        System.out.println("Checking : "+name);
+        System.out.println("Checking : "+name+" from "+ip);
         String pwd = br.readLine();
         if(AuthData.getInstance().isUser(name)) {
             

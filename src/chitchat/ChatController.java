@@ -9,4 +9,9 @@ import java.net.Socket;
 public interface ChatController {
     public void sendMessage(String msg);
     public void setUI(UI ui);
+
+    public void startAudioCall();
+    public void disconnectAudioCall();
+    public void startVideoCall();
+    public void disconnectVideoCall();
 }

@@ -5,6 +5,7 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -68,6 +69,28 @@ public class P2PChat implements ChatController {
         return false;
           
     }
+
+    @Override
+    public void startAudioCall() {
+        String ip =  ((InetSocketAddress)socket.getRemoteSocketAddress()).getAddress().toString().substring(1);
+        ChitChat.getInstance().callAsAudio(ip);
+    }
+
+    @Override
+    public void startVideoCall() {
+        String ip =  ((InetSocketAddress)socket.getRemoteSocketAddress()).getAddress().toString().substring(1);
+        ChitChat.getInstance().callAsVideo(ip);
+    }
+    
+    @Override
+    public void disconnectAudioCall() {
+       ChitChat.getInstance().disconnectAudio();
+    }
+
+    @Override
+    public void disconnectVideoCall() {
+        ChitChat.getInstance().disconnectVideo();
+    }
     
     class Reader extends Thread{
         
@@ -75,20 +98,29 @@ public class P2PChat implements ChatController {
         public void run() {
             System.out.println("Reader Started");
                 try {
-                    
-                    ui.addMessage("Chat Top", "System");
+                    String msg="Commands\n==========================\n";
+                    msg+="    'CALL'       - Audio Call\n";
+                    msg+="    'VCALL'      - Video Call\n";
+                    msg+="    'STOP_CALL'  - Stop Audio Call\n";
+                    msg+="    'STOP_VCALL' - Stop Video Call\n";
+                    msg+="==========================\n\n";
+                    addSystemMessage(msg);
                     String line;
                     while((line=br.readLine())!=null) {
                         ui.addMessage(line, othername);
                     }
                     
                 } catch (IOException ex) {
-                    ui.addMessage("Chat Ended!", "System");
+                    addSystemMessage("Chat Ended!");
                 }
            
         }
         
         
     }
+    
+    public void addSystemMessage(String msg) {
+        ui.addMessage(msg, "System");
+    } 
     
 }

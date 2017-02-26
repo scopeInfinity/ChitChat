@@ -12,12 +12,22 @@ import javax.swing.JOptionPane;
 public class ChitChat implements Controller {
     private String myname;
     private VideoCall videoCall;
+    private AudioCall audioCall;
+    private P2PChat chat;
+    private static ChitChat instance;
 
-    public ChitChat(String myname) {
-        this.myname = myname;
-        videoCall = new VideoCall(myname);
+    public static ChitChat getInstance() {
+        return instance;
     }
     
+    public ChitChat(String myname) {
+        instance = this;
+        this.myname = myname;
+        videoCall = new VideoCall(myname,this);
+        audioCall = new AudioCall(this);
+    }
+    
+      
     public static ChitChat start(String myname) {
         ChitChat chat = new ChitChat(myname);
         Server server = new Server(chat,myname);
@@ -92,14 +102,49 @@ public class ChitChat implements Controller {
             }.start();
         }
         else {
-            JOptionPane.showMessageDialog(null, "Max 1 Video Call Allowed");
+            addSystemMessage("Max 1 Video Call at a time!");
         }
+    }
+    
+    public void callAsAudio(String IP) {
+
+        if(audioCall.canStart()) {
+            new Thread("Audio Call Client"){
+                @Override
+                public void run() {
+                    audioCall.connectAsClient(IP);
+                }
+
+            }.start();
+        }
+        else {
+            addSystemMessage("Max 1 Audio Call at a time!");
+        }
+    }
+    
+    public void addSystemMessage(String str) {
+        if(chat!=null)
+            chat.addSystemMessage(str);
     }
     
     @Override
     public void addP2P(Socket socket, String myname) {
-        P2PChat chat = new P2PChat(socket,myname);
+        chat = new P2PChat(socket,myname);
         chat.start();
+    }
+
+    void disconnectVideo() {
+        if(videoCall==null)
+            return;;
+        addSystemMessage(videoCall.stop());
+        
+    }
+
+    void disconnectAudio() {
+        if(audioCall==null)
+            return;;
+        addSystemMessage(audioCall.stop());
+        
     }
     
 }

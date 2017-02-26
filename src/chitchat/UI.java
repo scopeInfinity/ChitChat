@@ -118,13 +118,25 @@ public class UI extends javax.swing.JFrame {
        
     }//GEN-LAST:event_jTextField1ActionPerformed
 
+    private void specialMsg(String msg) {
+        if(msg.equals("CALL")) {
+            controller.startAudioCall();
+        } else if(msg.equals("VCALL")) {
+            controller.startVideoCall();
+        } else if(msg.equals("STOP_CALL")) {
+            controller.disconnectAudioCall();;
+        } else if(msg.equals("STOP_VCALL")) {
+            controller.disconnectVideoCall();
+        }
+    } 
     
     private void jTextField1KeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTextField1KeyReleased
         // TODO add your handling code here:
         if(evt.getKeyCode() == KeyEvent.VK_ENTER) {
-            String msg = jTextField1.getText();
+            String msg = jTextField1.getText().trim();
             jTextField1.setText("");
             controller.sendMessage(msg);
+            specialMsg(msg);
         }
     }//GEN-LAST:event_jTextField1KeyReleased
 

@@ -49,6 +49,8 @@ import javax.swing.JOptionPane;
 
 public class VideoCall {
     private boolean isBusy = false;
+    private ChitChat chat;
+    
     private int SWIDTH = 640;
     private int SHEIGHT = 480;
 
@@ -69,7 +71,13 @@ public class VideoCall {
     
     private String myname;
   
-    public VideoCall(String myname) {
+    private void addSystemMessage(String str) {
+        if(chat!=null)
+            chat.addSystemMessage(str);
+    }
+    
+    public VideoCall(String myname,ChitChat chat) {
+        this.chat = chat;
         this.myname = myname;
         String OS = System.getProperty("os.name").toLowerCase();
         if(OS.contains("windows")) {
@@ -100,14 +108,12 @@ public class VideoCall {
                 public void run() {
                     while (true) {
                         try {
-                            while(isBusy) {
-                                Thread.yield();
-                            }
                             System.out.println("Waiting for Video Call");
                             Socket socket = server.accept();
-                            while(isBusy) {
+                            if(isBusy) {
                                 System.out.println("Call Disconnected, due to already in Call");
                                 socket.close();
+                                continue;
                             }
                             isBusy = true;
                             System.out.println("Video Call client : "+socket);
@@ -128,12 +134,14 @@ public class VideoCall {
         return false;
     }
 
-    public void connectToCall(String IP) {
+    synchronized public void connectToCall(String IP) {
         try {
             Socket socket = new Socket(IP, VIDEO_PORT);
             System.out.println("Going to Connect");
-            while(isBusy){
-                Thread.yield();
+            if(isBusy){
+                socket.close();
+                JOptionPane.showMessageDialog(null, "Max 1 Call");
+                return;
             }
             isBusy = true;
             startCall(socket);
@@ -146,6 +154,7 @@ public class VideoCall {
     
     private boolean startCall(Socket socket) {
         try {
+            addSystemMessage("Starting Video Call");
             BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
             DataInputStream is = new DataInputStream(socket.getInputStream());
             System.out.println("Video Stream Opened");
@@ -164,6 +173,7 @@ public class VideoCall {
             startStreaming(socket, bos);
             return true;
         } catch (Exception e) {
+            addSystemMessage("Video Closed!");
             return false;
         }
     }
@@ -175,7 +185,8 @@ public class VideoCall {
     
     private static final int TYPE_STRING = 0;
     private static final int TYPE_IMAGE = 1;
-    private static final int TYPE_ACK = 2;
+    public static final int TYPE_ACK = 2;
+    public static final int TYPE_AUDIO = 3;
     
     /**
      * Send Data to Stream
@@ -184,19 +195,27 @@ public class VideoCall {
      * @param type
      * @throws IOException 
      */
-    synchronized private void sendData(BufferedOutputStream bos, byte []data, int type) throws IOException {
+    synchronized public static void sendData(BufferedOutputStream bos, byte []data, int type) throws IOException {
         bos.write(type);
          if(data==null)
              data=new byte[0];
-        int len = data.length;
+        int len=data.length;
         for (int i = 0; i < 4; i++) {
             bos.write(len%256);
             len/=256;
         }
         bos.write(data);
-        System.out.println("Send "+data.length+" Hash:"+data.hashCode());
         bos.flush();
+        System.out.println("Send "+data.length+" Hash:"+data.hashCode());
     }
+    
+//    synchronized public static void sendData(BufferedOutputStream bos, byte []data, int type) throws IOException {
+//        int len;
+//        if(data==null)
+//            len = 0;
+//        else len = data.length;
+//        sendData(bos, data, type, len);
+//    }
     
     /**
      * Get Data from Stream
@@ -205,7 +224,7 @@ public class VideoCall {
      * @return data
      * @throws IOException 
      */
-    private byte[] readData(DataInputStream bis,int type[]) throws IOException {
+    public static byte[] readData(DataInputStream bis,int type[]) throws IOException {
         System.out.println("Waiting to Rec");
         type[0] = bis.read();
         if(type[0]==-1)
@@ -221,9 +240,11 @@ public class VideoCall {
                 new IOException("No Length Found");
             len=len+l*(1<<(8*i));
         }
-        System.out.println("LEn : "+len);
+        System.out.println("Len : "+len);
         byte[] data=new byte[len];
-        bis.readFully(data);
+        bis.readFully(data,0,len);
+//        if(ln!=len)
+//        System.out.println("ERRRRRROR : "+ln+" != "+len);
         System.out.println("Rec "+data.length+" Hash :"+data.hashCode());
         
         return data;
@@ -243,6 +264,9 @@ public class VideoCall {
     }
     
     private boolean startStreaming(Socket socket, BufferedOutputStream bos) {
+        IContainer container = null;
+        IStreamCoder coder = null;
+            
         try {
             STREAM_ACK_FRAME = false;
             writeString(bos,myname);
@@ -252,7 +276,7 @@ public class VideoCall {
                 throw new RuntimeException("you must install the GPL version of Xuggler (with IVideoResampler support) for this demo to work");
             }
 
-            IContainer container = IContainer.make();
+            container = IContainer.make();
             IContainerFormat format = IContainerFormat.make();
 
             if (format.setInputFormat(driverName) < 0) {
@@ -270,7 +294,6 @@ public class VideoCall {
             int numStreams = container.getNumStreams();
 
             int streamIndex = -1;
-            IStreamCoder coder = null;
             for (int i = 0; i < numStreams; i++) {
                 IStream steam = container.getStream(i);
                 IStreamCoder innerCoder = steam.getStreamCoder();
@@ -365,8 +388,7 @@ public class VideoCall {
                 }
             }
 
-            bos.close();
-            coder.close();
+            
             return true;
         } catch (Exception e) {
             e.printStackTrace();
@@ -374,6 +396,16 @@ public class VideoCall {
 //            JOptionPane.showMessageDialog(null, "Error in Service");
             return false;
         } finally {
+            if(bos!=null)
+            try {
+                bos.close();
+            } catch (IOException ex) {
+                Logger.getLogger(VideoCall.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            if(coder!=null)
+                coder.close();
+            if(container!=null)
+                container.close();
             isBusy = false;
             JOptionPane.showMessageDialog(null, "Call Over");
         }
@@ -420,6 +452,13 @@ public class VideoCall {
             mScreen = null;
         }
         return false;
+    }
+
+    String stop() {
+        if(!isBusy)
+            return "No Video Call Running!";
+        isBusy=false;
+        return "Video Stopped";
     }
     
 

@@ -19,6 +19,7 @@ public class FriendList extends javax.swing.JFrame {
     private String myusername, mypwd;
     private ArrayList<String> ips;
     private ChitChat cc;
+    
     /**
      * Creates new form FriendList
      */
@@ -33,11 +34,11 @@ public class FriendList extends javax.swing.JFrame {
             @Override
             public void itemStateChanged(ItemEvent e) {
                 String ip =ips.get((int)e.getItem());
-                int type = JOptionPane.showConfirmDialog(null, "Do you want to video call","Video Call", JOptionPane.YES_NO_OPTION);
-                if(type==0)
-                    cc.callAsVideo(ip);
-                else
-                    cc.addClient(ip);
+//                int type = JOptionPane.showConfirmDialog(null, "Do you want to video call","Video Call", JOptionPane.YES_NO_OPTION);
+//                if(type==0)
+//                    cc.callAsVideo(ip);
+//                else
+                  cc.addClient(ip);
             }
         });
         updateFriendList();
